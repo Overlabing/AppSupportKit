@@ -1,0 +1,17 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "The saved settings couldn't be read, so the defaults have been restored.": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les réglages enregistrés sont illisibles ; les valeurs par défaut sont rétablies."
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}
