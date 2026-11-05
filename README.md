@@ -58,9 +58,11 @@ The standards it follows:
 - RFC 2397, the `data:` URL scheme.
 - RFC 9111: §5.2.2.1 `max-age`, §5.2.2.4 `no-cache`, §5.2.2.5 `no-store`, §4.2.2 heuristic freshness.
 
-Decoding accepts PNG, ICO (its largest image), JPEG, GIF and WebP, checked before decoding, and at most 4096 × 4096
-pixels. An SVG is drawn by the system's static renderer (macOS) only when it has no script, event handler, external
-reference or DTD; elsewhere it decodes to nil and the next candidate is tried.
+Decoding accepts PNG, ICO (its largest image), JPEG, GIF and WebP, recognized by their signature before decoding, and
+at most 4096 × 4096 pixels. An SVG must be an XML document whose root element is `svg`, with no DTD and no processing
+instruction, made only of allow-listed static elements (shapes, paths, gradients, groups, text, `use` of a local
+fragment) and presentation attributes. The system's static renderer (macOS) draws it, and the result is kept only when
+that renderer read it as an SVG. Elsewhere an SVG decodes to nil and the next candidate is tried.
 
 ## Developing
 

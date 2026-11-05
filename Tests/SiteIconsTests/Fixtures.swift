@@ -51,3 +51,30 @@ func centrePixel(_ image: CGImage) throws -> [UInt8] {
     context.draw(image, in: CGRect(x: -image.width / 2, y: -image.height / 2, width: image.width, height: image.height))
     return pixel
 }
+
+/// A one-page PDF of `size` points with `<svg>` in a comment line right after its header, where a check of the first
+/// bytes for `<svg` would find it.
+func pdfCarryingSVGTag(size: Int) throws -> Data {
+    let pdf = NSMutableData()
+    var box = CGRect(x: 0, y: 0, width: size, height: size)
+    let consumer = try #require(CGDataConsumer(data: pdf))
+    let context = try #require(CGContext(consumer: consumer, mediaBox: &box, nil))
+    context.beginPDFPage(nil)
+    context.fill(box)
+    context.endPDFPage()
+    context.closePDF()
+    var data = pdf as Data
+    let header = try #require(data.firstIndex(of: UInt8(ascii: "\n")))
+    data.insert(contentsOf: Data("%<svg>\n".utf8), at: header + 1)
+    return data
+}
+
+/// A TIFF of `size` pixels whose description, early in the file, reads `<svg …>`.
+func tiffCarryingSVGTag(size: Int) throws -> Data {
+    let data = NSMutableData()
+    let destination = try #require(CGImageDestinationCreateWithData(data, UTType.tiff.identifier as CFString, 1, nil))
+    let properties = [kCGImagePropertyTIFFDictionary: [kCGImagePropertyTIFFImageDescription: "<svg xmlns=\"http://www.w3.org/2000/svg\">"]]
+    CGImageDestinationAddImage(destination, try iconImage(size: size), properties as CFDictionary)
+    #expect(CGImageDestinationFinalize(destination))
+    return data as Data
+}

@@ -43,23 +43,6 @@ enum HTMLLinkScanner {
         return tags
     }
 
-    /// Every attribute of every start tag of `markup`, in order: what an SVG declares, for `SVGSafety`.
-    static func allAttributes(in markup: String) -> [(name: String, value: String)] {
-        let bytes = Array(markup.utf8)
-        var found: [(name: String, value: String)] = []
-        var index = 0
-        while let open = bytes[index...].firstIndex(of: UInt8(ascii: "<")) {
-            index = open + 1
-            guard index < bytes.count else { break }
-            if bytes[index].isASCIILetter {
-                let (_, attributes, end) = startTag(bytes, from: index)
-                found += attributes
-                index = end
-            }
-        }
-        return found
-    }
-
     /// The tag name, its attributes and the index just past its `>`.
     private static func startTag(_ bytes: [UInt8], from start: Int) -> (String, [(name: String, value: String)], Int) {
         var index = start

@@ -132,6 +132,18 @@ import Testing
         #expect(IconDiscovery.links(inHTML: html, page: page, site: "exemple.fr").icons.map(\.path) == ["/b.svg", "/c.png"])
     }
 
+    /// The `type` filter is for icons only: a manifest declares its own type (Web App Manifest §1.4, media type).
+    @Test func aManifestKeepsItsOwnType() {
+        let html = """
+            <link rel="manifest" href="/site.webmanifest" type="application/manifest+json">
+            <link rel="mask-icon" href="/m.avif" type="image/avif" color="#000000">
+            <link rel="apple-touch-icon" href="/t.avif" type="image/avif">
+            """
+        let links = IconDiscovery.links(inHTML: html, page: page, site: "exemple.fr")
+        #expect(links.manifest?.absoluteString == "https://www.exemple.fr/site.webmanifest")
+        #expect(links.maskIcons.isEmpty && links.touchIcons.isEmpty)
+    }
+
     /// `sizes="any"` (a scalable icon) ranks before every size; several sizes count by the largest.
     @Test func anyAndSeveralSizesRank() {
         let html = """

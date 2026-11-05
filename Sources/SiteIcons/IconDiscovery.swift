@@ -78,10 +78,14 @@ public enum IconDiscovery {
             else { continue }
             // `rel` is an unordered set of unique space-separated tokens, ASCII case-insensitive (HTML §4.2.4, §4.6.8).
             let rel = Set((attributes["rel"] ?? "").lowercased().split(whereSeparator: \.isWhitespace).map(String.init))
-            if let type = attributes["type"], !type.isEmpty, !imageTypes.contains(mediaType(type)) { continue }
+            // The `type` filter applies to images only: a manifest declares its own media type.
+            let type = attributes["type"] ?? ""
+            let isImage = type.isEmpty || imageTypes.contains(mediaType(type))
             let size = largestSize(attributes["sizes"])
             if rel.contains("manifest") {
                 if links.manifest == nil { links.manifest = url }
+            } else if !isImage {
+                continue
             } else if rel.contains("apple-touch-icon") || rel.contains("apple-touch-icon-precomposed") {
                 touch.append((url, size))
             } else if rel.contains("icon") {

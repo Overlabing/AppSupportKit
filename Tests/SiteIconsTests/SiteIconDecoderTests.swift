@@ -4,6 +4,10 @@ import SiteIcons
 import Testing
 import UniformTypeIdentifiers
 
+#if canImport(AppKit)
+import AppKit
+#endif
+
 @Suite struct SiteIconDecoderTests {
     @Test("A type outside the allow-list (TIFF) is not decoded; PNG is")
     func onlyAllowedRasterTypes() throws {
@@ -20,6 +24,18 @@ import UniformTypeIdentifiers
         #expect(SiteIconDecoder.decode(try iconICO(sizes: [16, 48]), maxPixelSize: 32)?.width == 32)
     }
 
+    @Test("A PDF or a TIFF carrying <svg in its first bytes is refused")
+    func anotherFormatPosingAsSVGIsRefused() throws {
+        for data in [try pdfCarryingSVGTag(size: 16), try tiffCarryingSVGTag(size: 2)] {
+            #expect(String(decoding: data.prefix(1024), as: UTF8.self).contains("<svg"))
+            #if canImport(AppKit)
+            // The system would draw both: only the decoder's own checks refuse them.
+            #expect(NSImage(data: data)?.isValid == true)
+            #endif
+            #expect(SiteIconDecoder.decode(data, maxPixelSize: 96) == nil)
+        }
+    }
+
     #if os(macOS)
     private let square = ##"<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#ff0000"/></svg>"##
 
@@ -33,7 +49,7 @@ import UniformTypeIdentifiers
         #expect(tall.height == 96)
     }
 
-    @Test("An SVG that could run something or fetch something is refused before any parsing", arguments: [
+    @Test("An SVG that could run something or fetch something, or is not one SVG document, is refused", arguments: [
         ##"<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><rect width="9" height="9"/></svg>"##,
         ##"<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><rect width="9" height="9"/></svg>"##,
         ##"<svg xmlns="http://www.w3.org/2000/svg"><image href="https://tracker.example/p.png" width="9" height="9"/></svg>"##,
@@ -42,6 +58,21 @@ import UniformTypeIdentifiers
         ##"<!DOCTYPE svg [<!ENTITY a "aaaa">]><svg xmlns="http://www.w3.org/2000/svg"><text>&a;</text></svg>"##,
         ##"<svg xmlns="http://www.w3.org/2000/svg"><foreignObject><p>x</p></foreignObject></svg>"##,
         ##"<svg xmlns="http://www.w3.org/2000/svg"><style>@import url(https://e.example/s.css);</style></svg>"##,
+        ##"<svg xmlns="http://www.w3.org/2000/svg"><svg:script xmlns:svg="http://www.w3.org/2000/svg">alert(1)</svg:script><rect width="9" height="9"/></svg>"##,
+        ##"<svg xmlns="http://www.w3.org/2000/svg"><svg:foreignObject xmlns:svg="http://www.w3.org/2000/svg" width="9" height="9"><p>x</p></svg:foreignObject></svg>"##,
+        ##"<?xml-stylesheet href="https://e.example/s.css"?><svg xmlns="http://www.w3.org/2000/svg"><rect width="9" height="9"/></svg>"##,
+        ##"<svg xmlns="http://www.w3.org/2000/svg"><rect width="9" height="9"/><?xml-stylesheet href="https://e.example/s.css"?></svg>"##,
+        ##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><use xlink:href="https://e.example/s.svg#a"/></svg>"##,
+        ##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:x="http://www.w3.org/1999/xlink"><use x:href="https://e.example/s.svg#a"/></svg>"##,
+        ##"<svg xmlns="http://www.w3.org/2000/svg"><a href="#r"><rect id="r" width="9" height="9"/></a></svg>"##,
+        ##"<svg xmlns="http://www.w3.org/2000/svg"><rect width="9" height="9"><set attributeName="fill" to="url(https://e.example/p.svg#p)"/></rect></svg>"##,
+        ##"<svg xmlns="http://www.w3.org/2000/svg"><rect width="9" height="9" style="fill: url( 'https://e.example/p.svg#p' )"/></svg>"##,
+        ##"<svg xmlns="http://www.w3.org/2000/svg"><g xmlns="http://www.w3.org/1999/xhtml"><rect width="9" height="9"/></g></svg>"##,
+        ##"<svg xmlns="http://www.w3.org/1999/xhtml"><rect width="9" height="9"/></svg>"##,
+        ##"<svg xmlns="http://www.w3.org/2000/svg"><rect width="9" height="9" filter="url(#f)"/><filter id="f"><feImage href="#r"/></filter></svg>"##,
+        ##"<svg xmlns="http://www.w3.org/2000/svg"><rect width="9" height="9"/>"##,
+        ##"<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg xmlns="http://www.w3.org/2000/svg"><rect width="9" height="9"/></svg>"##,
+        ##"<html><svg xmlns="http://www.w3.org/2000/svg"><rect width="9" height="9"/></svg></html>"##,
     ])
     func anActiveSVGIsRefused(svg: String) {
         #expect(SiteIconDecoder.decode(Data(svg.utf8), maxPixelSize: 96) == nil)
@@ -51,6 +82,30 @@ import UniformTypeIdentifiers
     func anInternalReferenceIsAllowed() {
         let svg = ##"<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><defs><linearGradient id="g"><stop offset="0" stop-color="#00f"/></linearGradient></defs><rect width="8" height="8" fill="url(#g)"/></svg>"##
         #expect(SiteIconDecoder.decode(Data(svg.utf8), maxPixelSize: 16) != nil)
+    }
+
+    @Test("A static icon as exporters write it is drawn: comments, style attribute, text, clip path, local use")
+    func anExportedStaticSVGIsDrawn() throws {
+        let svg = ##"""
+            \##u{FEFF}<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+            <!-- Exported -->
+            <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" viewBox="0 0 32 32" width="32" height="32">
+              <title>Logo</title>
+              <defs>
+                <radialGradient id="g" cx="50%" cy="50%" r="50%"><stop offset="0" style="stop-color:#00ff00"/></radialGradient>
+                <clipPath id="c"><circle cx="16" cy="16" r="16"/></clipPath>
+                <path id="p" d="M0 0h32v32h-32z"/>
+              </defs>
+              <g clip-path="url(#c)" fill-rule="evenodd">
+                <use xlink:href="#p" style="fill: url(#g); opacity: 1"/>
+                <use href="#p" fill="#00ff00"/>
+              </g>
+              <text x="2" y="30" font-family="Helvetica" font-size="4"><tspan>a</tspan></text>
+            </svg>
+            """##
+        let image = try #require(SiteIconDecoder.decode(Data(svg.utf8), maxPixelSize: 64))
+        #expect(image.width == 64)
+        #expect(try centrePixel(image) == [0, 255, 0, 255])
     }
 
     @Test("An SVG over the size limit is refused")
