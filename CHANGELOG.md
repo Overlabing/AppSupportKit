@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.2
+
+### Added
+
+- **DefaultApps**: `makeDefault` for a content type, next to the scheme one (issue #1).
+  `DefaultApplicationClient.makeDefault(_:forContentType:)` and
+  `DefaultApplicationCheck.makeDefault(forContentType:)` make the app the default for a `UTType` (`.html`). The live
+  `WorkspaceDefaultApplications` calls `NSWorkspace.setDefaultApplication(at:toOpen:)` (macOS 12); the system asks the
+  user to confirm when the type needs consent. `SimulatedDefaultApplications` handles it and gains
+  `setDefault(_:forContentType:)` for a default changed elsewhere.
+- **DefaultApps**: `DefaultApplicationCheck.status(forContentType:)`, the same `DefaultApplicationStatus` as for a
+  scheme (another copy of the same app counts as this app). The read-only `defaultApplication(forContentType:)` already
+  existed.
+- **DefaultApps**: `DefaultApplicationError.contentTypesNotSupported`. The new client requirement has a default
+  implementation that throws it, so a client written for 0.1.1 still compiles, and fails loudly rather than doing
+  nothing when asked to change a content type.
+
 ## 0.1.1
 
 ### Fixed

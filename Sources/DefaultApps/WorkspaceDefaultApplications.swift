@@ -3,7 +3,8 @@ import AppKit
 import UniformTypeIdentifiers
 
 /// LaunchServices through `NSWorkspace`. From the sandbox it reads and opens only: `setDefaultApplication` fails with
-/// `permErr` (-54) for any URL or scheme (Apple DTS, https://developer.apple.com/forums/thread/731555).
+/// `permErr` (-54) for any URL or scheme (Apple DTS, https://developer.apple.com/forums/thread/731555). The change for
+/// a content type is `setDefaultApplication(at:toOpen:)`, macOS 12; the sandbox result is not verified for it.
 public struct WorkspaceDefaultApplications: DefaultApplicationClient {
     public init() {}
 
@@ -29,6 +30,10 @@ public struct WorkspaceDefaultApplications: DefaultApplicationClient {
 
     public func makeDefault(_ url: URL, forScheme scheme: String) async throws {
         try await NSWorkspace.shared.setDefaultApplication(at: url, toOpenURLsWithScheme: scheme)
+    }
+
+    public func makeDefault(_ url: URL, forContentType type: UTType) async throws {
+        try await NSWorkspace.shared.setDefaultApplication(at: url, toOpen: type)
     }
 
     private static func application(at url: URL) -> InstalledApplication {

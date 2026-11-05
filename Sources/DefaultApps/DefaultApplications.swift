@@ -30,6 +30,22 @@ public protocol DefaultApplicationClient: Sendable {
     /// Makes the app at `url` the default for the scheme. The system asks the user to confirm. A sandboxed app cannot
     /// do it: the call fails, and the app sends the user where the setting lives instead.
     func makeDefault(_ url: URL, forScheme scheme: String) async throws
+    /// Makes the app at `url` the default for the content type (`public.html`). The system asks the user to confirm
+    /// when the change needs consent. A sandboxed app cannot do it: the call fails, as for a scheme. A client written
+    /// before this requirement existed gets the default implementation, which throws
+    /// `DefaultApplicationError.contentTypesNotSupported`.
+    func makeDefault(_ url: URL, forContentType type: UTType) async throws
+}
+
+extension DefaultApplicationClient {
+    public func makeDefault(_ url: URL, forContentType type: UTType) async throws {
+        throw DefaultApplicationError.contentTypesNotSupported
+    }
+}
+
+public enum DefaultApplicationError: Error, Sendable, Hashable {
+    /// The client cannot change the default app of a content type.
+    case contentTypesNotSupported
 }
 
 /// Is this app the default for a scheme?
@@ -64,7 +80,16 @@ public struct DefaultApplicationCheck: Sendable {
     }
 
     public func status(forScheme scheme: String) async -> DefaultApplicationStatus {
-        guard let app = await client.defaultApplication(forScheme: scheme) else { return .none }
+        status(of: await client.defaultApplication(forScheme: scheme))
+    }
+
+    /// The same for a content type (`public.html`).
+    public func status(forContentType type: UTType) async -> DefaultApplicationStatus {
+        status(of: await client.defaultApplication(forContentType: type))
+    }
+
+    private func status(of application: InstalledApplication?) -> DefaultApplicationStatus {
+        guard let app = application else { return .none }
         if app.bundleIdentifier?.caseInsensitiveCompare(bundleIdentifier) == .orderedSame
             || app.url.standardizedFileURL == applicationURL.standardizedFileURL
         {
@@ -76,6 +101,11 @@ public struct DefaultApplicationCheck: Sendable {
     /// Makes this app the default for the scheme (see `DefaultApplicationClient.makeDefault`).
     public func makeDefault(forScheme scheme: String) async throws {
         try await client.makeDefault(applicationURL, forScheme: scheme)
+    }
+
+    /// Makes this app the default for the content type (see `DefaultApplicationClient.makeDefault`).
+    public func makeDefault(forContentType type: UTType) async throws {
+        try await client.makeDefault(applicationURL, forContentType: type)
     }
 }
 
@@ -113,6 +143,11 @@ public final class SimulatedDefaultApplications: DefaultApplicationClient {
         state.withLock { $0.defaults[scheme.lowercased()] = application }
     }
 
+    /// The user changes the default of a content type elsewhere.
+    public func setDefault(_ application: InstalledApplication?, forContentType type: UTType) {
+        state.withLock { $0.contentTypes[type.identifier] = application }
+    }
+
     /// Installs or removes an app.
     public func setInstalled(_ url: URL?, bundleIdentifier: String) {
         state.withLock { $0.installed[bundleIdentifier] = url }
@@ -140,15 +175,25 @@ public final class SimulatedDefaultApplications: DefaultApplicationClient {
     public func makeDefault(_ url: URL, forScheme scheme: String) async throws {
         try state.withLock { state in
             try state.takeFailure()
-            let name = url.deletingPathExtension().lastPathComponent
-            let bundleIdentifier = state.installed.first { $0.value == url }?.key
-            state.defaults[scheme.lowercased()] = InstalledApplication(
-                url: url, bundleIdentifier: bundleIdentifier, name: name)
+            state.defaults[scheme.lowercased()] = state.application(at: url)
+        }
+    }
+
+    public func makeDefault(_ url: URL, forContentType type: UTType) async throws {
+        try state.withLock { state in
+            try state.takeFailure()
+            state.contentTypes[type.identifier] = state.application(at: url)
         }
     }
 }
 
 extension SimulatedDefaultApplications.State {
+    fileprivate func application(at url: URL) -> InstalledApplication {
+        InstalledApplication(
+            url: url, bundleIdentifier: installed.first { $0.value == url }?.key,
+            name: url.deletingPathExtension().lastPathComponent)
+    }
+
     fileprivate mutating func takeFailure() throws {
         guard let failure else { return }
         self.failure = nil
